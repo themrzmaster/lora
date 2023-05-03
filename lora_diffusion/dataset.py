@@ -194,12 +194,15 @@ class PivotalTuningDatasetCapation(Dataset):
         use_face_segmentation_condition=False,
         train_inpainting=False,
         clipseg_mask=False,
+        clipseg_prompt="",
         blur_amount: int = 70,
     ):
         self.size = size
         self.tokenizer = tokenizer
         self.resize = resize
         self.train_inpainting = train_inpainting
+        self.clipseg_mask = clipseg_mask
+        self.clipseg_prompt = clipseg_prompt
 
         instance_data_root = Path(instance_data_root)
         if not instance_data_root.exists():
@@ -334,7 +337,7 @@ class PivotalTuningDatasetCapation(Dataset):
             (
                 example["instance_masks"],
                 example["instance_masked_images"],
-            ) = _generate_clipseg_mask(example["instance_images"])
+            ) = _generate_clipseg_mask(example["instance_images"], self.clipseg_prompt)
 
         if self.use_template:
             assert self.token_map is not None
