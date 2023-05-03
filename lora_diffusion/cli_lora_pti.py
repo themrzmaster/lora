@@ -703,8 +703,6 @@ def train(
     perform_inversion: bool = True,
     use_template: Literal[None, "object", "style"] = None,
     train_inpainting: bool = False,
-    clipseg_mask: bool = False,
-    clipseg_prompt: str = "",
     placeholder_tokens: str = "",
     placeholder_token_at_data: Optional[str] = None,
     initializer_tokens: Optional[str] = None,
@@ -850,8 +848,6 @@ def train(
         use_face_segmentation_condition=use_face_segmentation_condition,
         use_mask_captioned_data=use_mask_captioned_data,
         train_inpainting=train_inpainting,
-        clipseg_mask=clipseg_mask,
-        clipseg_prompt=clipseg_prompt,
     )
 
     train_dataset.blur_amount = 200

@@ -62,8 +62,8 @@ def swin_ir_sr(
 
 @torch.no_grad()
 def clipseg_mask_generator(
-    images: List[Image.Image],
-    target_prompts: Union[List[str], str],
+    image,
+    target_prompts,
     model_id: Literal[
         "CIDAS/clipseg-rd64-refined", "CIDAS/clipseg-rd16"
     ] = "CIDAS/clipseg-rd64-refined",
@@ -76,46 +76,42 @@ def clipseg_mask_generator(
     Returns a greyscale mask for each image, where the mask is the probability of the target prompt being present in the image
     """
 
-    if isinstance(target_prompts, str):
-        print(
-            f'Warning: only one target prompt "{target_prompts}" was given, so it will be used for all images'
-        )
-
-        target_prompts = [target_prompts] * len(images)
-
     processor = CLIPSegProcessor.from_pretrained(model_id)
     model = CLIPSegForImageSegmentation.from_pretrained(model_id).to(device)
 
     masks = []
 
-    for image, prompt in tqdm(zip(images, target_prompts)):
+    image = (image.numpy() * 255).astype(np.uint8)
+    image_arr = np.moveaxis(image, [0,1,2], [2,0,1])
+    image = Image.fromarray(image_arr)
+    original_size = image.size
 
-        original_size = image.size
+    inputs = processor(
+        text=[target_prompts, ""],
+        images=[image] * 2,
+        padding="max_length",
+        truncation=True,
+        return_tensors="pt",
+    ).to(device)
 
-        inputs = processor(
-            text=[prompt, ""],
-            images=[image] * 2,
-            padding="max_length",
-            truncation=True,
-            return_tensors="pt",
-        ).to(device)
+    outputs = model(**inputs)
 
-        outputs = model(**inputs)
+    logits = outputs.logits
+    probs = torch.nn.functional.softmax(logits / temp, dim=0)[0]
+    probs = (probs + bias).clamp_(0, 1)
+    probs = 255 * probs / probs.max()
 
-        logits = outputs.logits
-        probs = torch.nn.functional.softmax(logits / temp, dim=0)[0]
-        probs = (probs + bias).clamp_(0, 1)
-        probs = 255 * probs / probs.max()
+    # make mask greyscale
+    mask = Image.fromarray(probs.cpu().numpy()).convert("L")
 
-        # make mask greyscale
-        mask = Image.fromarray(probs.cpu().numpy()).convert("L")
+    # resize mask to original size
+    mask = mask.resize(original_size)
 
-        # resize mask to original size
-        mask = mask.resize(original_size)
+    mask = (np.expand_dims(np.array(mask) /255, axis=2) > 0.95)
+    masked_image_clip = image_arr * (1- mask)
 
-        masks.append(mask)
+    return torch.Tensor(mask).permute(2, 0, 1), torch.Tensor(masked_image_clip).permute(2, 0, 1)
 
-    return masks
 
 
 @torch.no_grad()
