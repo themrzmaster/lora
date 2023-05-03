@@ -172,7 +172,7 @@ def _generate_clipseg_mask(
     mask = (np.expand_dims(np.array(mask) /255, axis=2) > 0.95)
     masked_image_clip = image_arr * (1- mask)
 
-    return torch.Tensor(mask).permute(2, 0, 1), torch.Tensor(masked_image_clip)
+    return torch.Tensor(mask).permute(2, 0, 1), torch.Tensor(masked_image_clip).permute(1, 2, 0)
 
 class PivotalTuningDatasetCapation(Dataset):
     """
