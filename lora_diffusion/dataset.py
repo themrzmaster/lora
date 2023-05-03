@@ -9,6 +9,12 @@ from torchvision import transforms
 import glob
 from .preprocess_files import face_mask_google_mediapipe
 
+from transformers import CLIPSegProcessor, CLIPSegForImageSegmentation
+from torchvision.transforms.functional import pil_to_tensor
+from typing import List, Literal, Union, Optional, Tuple
+import numpy as np
+import torch
+
 OBJECT_TEMPLATE = [
     "a photo of a {}",
     "a rendering of a {}",
@@ -116,6 +122,58 @@ def _generate_random_mask(image):
     return mask, masked_image
 
 
+@torch.no_grad()
+def _generate_clipseg_mask(
+    image,
+    target_prompts,
+    model_id: Literal[
+        "CIDAS/clipseg-rd64-refined", "CIDAS/clipseg-rd16"
+    ] = "CIDAS/clipseg-rd64-refined",
+    device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
+    bias: float = 0.01,
+    temp: float = 1.0,
+    **kwargs,
+) -> List[Image.Image]:
+    """
+    Returns a greyscale mask for each image, where the mask is the probability of the target prompt being present in the image
+    """
+
+    processor = CLIPSegProcessor.from_pretrained(model_id)
+    model = CLIPSegForImageSegmentation.from_pretrained(model_id).to(device)
+
+    masks = []
+
+    image = (image.numpy() * 255).astype(np.uint8)
+    image_arr = np.moveaxis(image, [0,1,2], [2,0,1])
+    image = Image.fromarray(image_arr)
+    original_size = image.size
+
+    inputs = processor(
+        text=[target_prompts, ""],
+        images=[image] * 2,
+        padding="max_length",
+        truncation=True,
+        return_tensors="pt",
+    ).to(device)
+
+    outputs = model(**inputs)
+
+    logits = outputs.logits
+    probs = torch.nn.functional.softmax(logits / temp, dim=0)[0]
+    probs = (probs + bias).clamp_(0, 1)
+    probs = 255 * probs / probs.max()
+
+    # make mask greyscale
+    mask = Image.fromarray(probs.cpu().numpy()).convert("L")
+
+    # resize mask to original size
+    mask = mask.resize(original_size)
+
+    mask = (np.expand_dims(np.array(mask) /255, axis=2) > 0.95)
+    masked_image_clip = image_arr * (1- mask)
+
+    return torch.Tensor(mask).permute(2, 0, 1), masked_image_clip
+
 class PivotalTuningDatasetCapation(Dataset):
     """
     A dataset to prepare the instance and class images with the prompts for fine-tuning the model.
@@ -135,6 +193,7 @@ class PivotalTuningDatasetCapation(Dataset):
         use_mask_captioned_data=False,
         use_face_segmentation_condition=False,
         train_inpainting=False,
+        clipseg_mask=False,
         blur_amount: int = 70,
     ):
         self.size = size
@@ -265,11 +324,17 @@ class PivotalTuningDatasetCapation(Dataset):
             instance_image = instance_image.convert("RGB")
         example["instance_images"] = self.image_transforms(instance_image)
 
-        if self.train_inpainting:
+        if self.train_inpainting and not self.clipseg_mask:
             (
                 example["instance_masks"],
                 example["instance_masked_images"],
             ) = _generate_random_mask(example["instance_images"])
+        
+        if self.train_inpainting and self.clipseg_mask:
+            (
+                example["instance_masks"],
+                example["instance_masked_images"],
+            ) = _generate_clipseg_mask(example["instance_images"])
 
         if self.use_template:
             assert self.token_map is not None
