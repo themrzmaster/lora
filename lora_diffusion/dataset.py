@@ -286,7 +286,7 @@ class PivotalTuningDatasetCapation(Dataset):
         example["instance_images"] = self.image_transforms(instance_image)
         
         use_clipseg = random.random() > self.clipseg_mask_ratio
-        if (self.train_inpainting and not self.use_clipseg_mask) or (self.train_inpainting and not use_clipseg):
+        if (self.train_inpainting and not self.use_clipseg_mask):
             (
                 example["instance_masks"],
                 example["instance_masked_images"],
