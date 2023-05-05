@@ -705,6 +705,7 @@ def train(
     train_inpainting: bool = False,
     clipseg_mask: bool = False,
     clipseg_prompt: str = "",
+    clipseg_mask_ratio: float = 0.0,
     placeholder_tokens: str = "",
     placeholder_token_at_data: Optional[str] = None,
     initializer_tokens: Optional[str] = None,
@@ -852,6 +853,7 @@ def train(
         train_inpainting=train_inpainting,
         clipseg_mask=clipseg_mask,
         clipseg_prompt=clipseg_prompt,
+        clipseg_mask_ratio=clipseg_mask_ratio,
     )
 
     train_dataset.blur_amount = 200

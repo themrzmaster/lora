@@ -195,11 +195,13 @@ class PivotalTuningDatasetCapation(Dataset):
         train_inpainting=False,
         clipseg_mask=False,
         clipseg_prompt="",
+        clipseg_mask_ratio=0.0,
         blur_amount: int = 70,
     ):
         self.size = size
         self.tokenizer = tokenizer
         self.resize = resize
+        self.clipseg_mask_ratio = clipseg_mask_ratio
         self.train_inpainting = train_inpainting
         self.clipseg_mask = clipseg_mask
         self.clipseg_prompt = clipseg_prompt
@@ -326,14 +328,15 @@ class PivotalTuningDatasetCapation(Dataset):
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
         example["instance_images"] = self.image_transforms(instance_image)
-
-        if self.train_inpainting and not self.clipseg_mask:
+        
+        clip_mask_now = random.random() > self.clipseg_mask_ratio
+        if (self.train_inpainting and not self.clipseg_mask) or (self.train_inpainting and self.clipseg_mask and clip_mask_now):
             (
                 example["instance_masks"],
                 example["instance_masked_images"],
             ) = _generate_random_mask(example["instance_images"])
         
-        if self.train_inpainting and self.clipseg_mask:
+        elif self.train_inpainting and self.clipseg_mask:
             (
                 example["instance_masks"],
                 example["instance_masked_images"],
