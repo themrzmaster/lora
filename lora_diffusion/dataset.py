@@ -136,8 +136,6 @@ class PivotalTuningDatasetCapation(Dataset):
         use_face_segmentation_condition=False,
         train_inpainting=False,
         use_clipseg_mask=False,
-        pre_gen_clipseg_mask=True,
-        clipseg_mask_ratio=0.5,
         clipseg_caption="",
         blur_amount: int = 70,
     ):
@@ -146,9 +144,6 @@ class PivotalTuningDatasetCapation(Dataset):
         self.resize = resize
         self.train_inpainting = train_inpainting
         self.use_clipseg_mask = use_clipseg_mask
-        self.clipseg_mask_ratio = clipseg_mask_ratio
-        self.clipseg_caption = clipseg_caption
-        self.pre_gen_clipseg_mask = pre_gen_clipseg_mask
 
         instance_data_root = Path(instance_data_root)
         if not instance_data_root.exists():
@@ -287,20 +282,16 @@ class PivotalTuningDatasetCapation(Dataset):
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
         example["instance_images"] = self.image_transforms(instance_image)
-        
-        use_clipseg = random.random() > self.clipseg_mask_ratio
-        if (self.train_inpainting and not self.use_clipseg_mask) or (self.train_inpainting and not use_clipseg):
+
+        if self.train_inpainting and not self.use_clipseg_mask:
             (
                 example["instance_masks"],
                 example["instance_masked_images"],
             ) = _generate_random_mask(example["instance_images"])
         
         elif self.train_inpainting and self.use_clipseg_mask:
-            if self.pre_gen_clipseg_mask:
-                example["instance_masks"] = self.clip_masks[idx]
-                example["instance_masked_images"] = self.clip_masked_img[idx]
-            else:
-                example["instance_masks"], example["instance_masked_images"] = clipseg_mask_generator(example["instance_images"], self.clipseg_caption)
+            example["instance_masks"] = self.clip_masks[idx]
+            example["instance_masked_images"] = self.clip_masked_img[idx]
 
         if self.use_template:
             assert self.token_map is not None
